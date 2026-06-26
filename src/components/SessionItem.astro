@@ -32,7 +32,7 @@ const { week, sessionNum, sb, wb, extra, isCompleted, userId } = Astro.props;
       data-user-id={userId}
     />
     <span class={`text-sm font-bold tracking-wide uppercase ${isCompleted ? 'text-emerald-700' : 'text-slate-600'}`}>
-      Sesión {sessionNum}
+      Session {sessionNum}
     </span>
   </div>
 
@@ -48,7 +48,7 @@ const { week, sessionNum, sb, wb, extra, isCompleted, userId } = Astro.props;
         </div>
       </div>
     ) : (
-      <div class="hidden md:block opacity-40 text-xs italic text-slate-400 self-center">Sin SB asignado</div>
+      <div class="hidden md:block opacity-40 text-xs italic text-slate-400 self-center">No SB assigned</div>
     )}
 
     <!-- Workbook -->
@@ -61,20 +61,20 @@ const { week, sessionNum, sb, wb, extra, isCompleted, userId } = Astro.props;
         </div>
       </div>
     ) : (
-      <div class="hidden md:block opacity-40 text-xs italic text-slate-400 self-center">Sin WB asignado</div>
+      <div class="hidden md:block opacity-40 text-xs italic text-slate-400 self-center">No WB assigned</div>
     )}
 
     <!-- Actividades Extra -->
     {extra && extra !== '—' ? (
       <div class="flex items-start gap-2">
-        <span class="text-amber-500 shrink-0 text-base" title="Actividades extra">🌟</span>
+        <span class="text-amber-500 shrink-0 text-base" title="Extra activities">🌟</span>
         <div>
-          <span class="font-semibold text-slate-700 block text-xs tracking-wider uppercase mb-0.5">Actividades Extra</span>
+          <span class="font-semibold text-slate-700 block text-xs tracking-wider uppercase mb-0.5">Extra Activities</span>
           <p class={`text-slate-600 leading-relaxed ${isCompleted ? 'line-through opacity-60' : ''}`}>{extra}</p>
         </div>
       </div>
     ) : (
-      <div class="hidden md:block opacity-40 text-xs italic text-slate-400 self-center">Sin actividad extra</div>
+      <div class="hidden md:block opacity-40 text-xs italic text-slate-400 self-center">No extra activity</div>
     )}
   </div>
 </div>
