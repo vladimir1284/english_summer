@@ -1,0 +1,806 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getDB } from '../utils/db';
+// Define TS Interfaces for DB types
+interface UserRow {
+  id: number;
+  name: string;
+  avatar: string;
+}
+
+interface ProgressRow {
+  user_id: number;
+  week: number;
+  completed: number;
+}
+
+// Get database
+const db = await getDB();
+
+// Query all users
+let users: UserRow[] = [];
+try {
+  const usersResult = await db.prepare('SELECT * FROM users ORDER BY id ASC').all<UserRow>();
+  users = usersResult.results || [];
+} catch (e: any) {
+  console.log("[DEBUG ERROR] Database query failed:", e.message, e.stack);
+}
+
+// Select active user
+const url = new URL(Astro.request.url);
+const userIdParam = url.searchParams.get('user_id');
+let selectedUserId = userIdParam ? parseInt(userIdParam, 10) : (users[0]?.id || 1);
+
+let selectedUser = users.find(u => u.id === selectedUserId);
+if (!selectedUser && users.length > 0) {
+  selectedUser = users[0];
+  selectedUserId = users[0].id;
+}
+
+// Query progress for selected user
+let progressRows: ProgressRow[] = [];
+if (selectedUser) {
+  try {
+    const progressResult = await db.prepare('SELECT * FROM progress WHERE user_id = ? ORDER BY week ASC')
+      .bind(selectedUserId)
+      .all<ProgressRow>();
+    progressRows = progressResult.results || [];
+  } catch (e: any) {
+    console.log("[DEBUG ERROR] Failed to query progress:", e.message, e.stack);
+  }
+}
+
+// Build progress map
+const progressMap = new Map<number, boolean>();
+for (let i = 1; i <= 8; i++) {
+  progressMap.set(i, false);
+}
+progressRows.forEach(row => {
+  progressMap.set(row.week, row.completed === 1);
+});
+
+// Calculate statistics
+const totalWeeks = 8;
+const completedCount = Array.from(progressMap.values()).filter(Boolean).length;
+const percentCompleted = Math.round((completedCount / totalWeeks) * 100);
+
+// Static Weeks Data
+interface SongVideo {
+  title: string;
+  url: string;
+  type: 'song' | 'video';
+}
+
+interface WeekData {
+  week: number;
+  unit: string;
+  focus: string;
+  songs: SongVideo[];
+}
+
+const WEEKS: WeekData[] = [
+  {
+    week: 1,
+    unit: "Unit 1",
+    focus: "What’s your name? (Saludos, deletreo y el abecedario)",
+    songs: [
+      { title: "Hello Hello! - Super Simple", url: "https://www.youtube.com/watch?v=fN1Cyr0ZK9M", type: "song" },
+      { title: "Hello! - Super Simple", url: "https://www.youtube.com/watch?v=tVlcKp3bWH8", type: "song" },
+      { title: "ABC Song - Super Simple", url: "https://www.youtube.com/watch?v=5XEN4vtH4Ic", type: "song" }
+    ]
+  },
+  {
+    week: 2,
+    unit: "Unit 2",
+    focus: "Where are my keys? (Objetos cotidianos y de clase, preposiciones de lugar)",
+    songs: [
+      { title: "Where is Thumbkin? - Super Simple", url: "https://www.youtube.com/watch?v=fN1Cyr0ZK9M", type: "song" },
+      { title: "Clean Up Song - Super Simple", url: "https://www.youtube.com/watch?v=1GDFa-nEzlg", type: "song" }
+    ]
+  },
+  {
+    week: 3,
+    unit: "Unit 3",
+    focus: "Where are you from? (Países, nacionalidades, y números del 11 al 30)",
+    songs: [
+      { title: "Hello Around the World", url: "https://www.youtube.com/watch?v=fN1Cyr0ZK9M", type: "song" }
+    ]
+  },
+  {
+    week: 4,
+    unit: "Unit 4",
+    focus: "Is this coat yours? (Prendas de vestir, colores y posesivos)",
+    songs: [
+      { title: "This Is The Way We Get Dressed - Super Simple", url: "https://www.youtube.com/watch?v=1GDFa-nEzlg", type: "song" },
+      { title: "This Is The Way We Get Dressed (version 2)", url: "https://www.youtube.com/watch?v=V8iNAq4b7po", type: "song" }
+    ]
+  },
+  {
+    week: 5,
+    unit: "Unit 5",
+    focus: "What time is it? (Decir la hora y rutinas diarias)",
+    songs: [
+      { title: "What Time Is It? - Telling Time Song", url: "https://www.youtube.com/watch?v=hqnc_PcvoB0", type: "song" },
+      { title: "Time Is Up - Super Simple", url: "https://www.youtube.com/watch?v=2fBkD00JvHY", type: "song" }
+    ]
+  },
+  {
+    week: 6,
+    unit: "Unit 6",
+    focus: "Homes & Furniture (Habitaciones, muebles y there is/there are)",
+    songs: [
+      { title: "Hide & Seek Around The House - Super Simple", url: "https://www.youtube.com/watch?v=CnevsHDtJXo", type: "song" },
+      { title: "In The Kitchen - Super Simple", url: "https://www.youtube.com/watch?v=2sClBxucyf8", type: "song" }
+    ]
+  },
+  {
+    week: 7,
+    unit: "Review",
+    focus: "Integración de las unidades 1 a 6 (Juegos de repaso y práctica oral)",
+    songs: []
+  },
+  {
+    week: 8,
+    unit: "Project",
+    focus: "Poster 'All About Me' y fiesta de celebración final 🥳",
+    songs: []
+  }
+];
+
+// Available avatars for member creation
+const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀', '🎨', '🎮', '🍕', '🦊', '🐸'];
+---
+
+<Layout title="English Adventure • Agenda Familiar">
+  <!-- Container -->
+  <main class="max-w-4xl mx-auto w-full px-4 py-8 flex-grow">
+    
+    <!-- Hero Header -->
+    <header class="relative rounded-3xl overflow-hidden bg-slate-900 shadow-xl mb-8 border border-slate-800">
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent z-10"></div>
+      <img 
+        src="/english_adventure_hero.jpg" 
+        alt="English Adventure Hero" 
+        class="w-full h-56 sm:h-64 object-cover object-center opacity-85 hover:scale-105 transition-transform duration-700 ease-out"
+      />
+      <div class="absolute bottom-0 left-0 right-0 p-6 sm:p-8 z-20">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500 text-white mb-3 shadow-md tracking-wide uppercase animate-pulse">
+          🎯 Summer Course
+        </span>
+        <h1 class="text-3xl sm:text-4xl font-extrabold font-display tracking-tight text-white mb-2">
+          English Adventure
+        </h1>
+        <p class="text-slate-200 text-sm sm:text-base font-medium max-w-xl">
+          Agenda interactiva de 8 semanas basada en <span class="text-amber-300 font-semibold">Interchange Intro</span>. ¡Ideal para aprender juntos!
+        </p>
+      </div>
+    </header>
+
+    <!-- Family Member Selector -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-8">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">
+            ¿Quién está estudiando hoy?
+          </h2>
+          <p class="text-xs text-slate-500">Selecciona tu perfil o añade uno nuevo para guardar tu progreso personal</p>
+        </div>
+        
+        <button 
+          id="btn-open-modal"
+          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition duration-200 self-start sm:self-auto cursor-pointer"
+        >
+          <span>Añadir familiar</span>
+          <span class="text-lg font-bold">+</span>
+        </button>
+      </div>
+
+      <!-- Members list -->
+      <div class="flex flex-wrap gap-3">
+        {users.map(u => {
+          const isSelected = u.id === selectedUserId;
+          return (
+            <a 
+              href={`?user_id=${u.id}`}
+              class={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
+                isSelected 
+                  ? 'border-indigo-600 bg-indigo-50/50 shadow-sm scale-102 font-bold text-indigo-900' 
+                  : 'border-slate-100 bg-slate-50 hover:border-slate-200 hover:bg-slate-100 text-slate-700'
+              }`}
+            >
+              <span class="text-2xl">{u.avatar}</span>
+              <span class="text-sm">{u.name}</span>
+              {isSelected && (
+                <span class="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+              )}
+            </a>
+          );
+        })}
+      </div>
+    </section>
+
+    <!-- Active User & Progress Stats Header -->
+    {selectedUser && (
+      <section class="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-lg mb-8 relative overflow-hidden">
+        <!-- Decoration Gradients -->
+        <div class="absolute right-0 top-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute left-1/3 bottom-0 w-32 h-32 bg-rose-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="flex flex-col sm:flex-row items-center gap-6 z-10 relative">
+          <!-- Avatar circle -->
+          <div class="w-20 h-20 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-inner border border-white/10 shrink-0">
+            {selectedUser.avatar}
+          </div>
+          
+          <div class="flex-grow text-center sm:text-left">
+            <span class="text-xs font-semibold text-indigo-300 tracking-wider uppercase">Progreso de:</span>
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-white mt-0.5">{selectedUser.name}</h2>
+            
+            <!-- Progress statistics -->
+            <div class="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-x-6 gap-y-2 text-sm text-slate-300">
+              <div>
+                <strong class="text-white text-base" id="stat-completed">{completedCount}</strong> de 8 semanas completadas
+              </div>
+              <div class="hidden sm:block text-indigo-700 font-bold">•</div>
+              <div id="motivational-message" class="text-indigo-200 italic">
+                {percentCompleted === 0 && "¡Empecemos esta gran aventura! 🚀"}
+                {percentCompleted > 0 && percentCompleted <= 30 && "¡Buen comienzo! Cada paso cuenta. 🌟"}
+                {percentCompleted > 30 && percentCompleted <= 70 && "¡Excelente progreso! Lo estás haciendo genial. 💪"}
+                {percentCompleted > 70 && percentCompleted < 100 && "¡Casi en la meta! ¡Sigue así! 🎉"}
+                {percentCompleted === 100 && "¡Felicidades! ¡Completaste toda la aventura! 🎓🏆"}
+              </div>
+            </div>
+          </div>
+
+          <!-- Circular percentage -->
+          <div class="shrink-0 flex flex-col items-center justify-center">
+            <div class="relative w-24 h-24 flex items-center justify-center">
+              <svg class="w-full h-full transform -rotate-90">
+                <circle cx="48" cy="48" r="40" stroke="currentColor" stroke-width="8" class="text-slate-800" fill="transparent" />
+                <circle 
+                  cx="48" 
+                  cy="48" 
+                  r="40" 
+                  stroke="currentColor" 
+                  stroke-width="8" 
+                  class="text-rose-500 transition-all duration-500 ease-out" 
+                  fill="transparent" 
+                  stroke-dasharray={2 * Math.PI * 40}
+                  stroke-dashoffset={2 * Math.PI * 40 * (1 - percentCompleted / 100)}
+                  id="circle-progress"
+                />
+              </svg>
+              <div class="absolute text-xl font-extrabold text-white font-display">
+                <span id="stat-percent">{percentCompleted}</span>%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linear Progress Bar wrapper -->
+        <div class="mt-6">
+          <div class="w-full h-3 bg-slate-950/60 rounded-full overflow-hidden p-0.5 border border-white/5">
+            <div 
+              class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${percentCompleted}%` }}
+              id="bar-progress"
+            ></div>
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- Navigation Tabs -->
+    <div class="flex border-b border-slate-200 mb-6 overflow-x-auto whitespace-nowrap scrollbar-none">
+      <button 
+        data-tab-target="tab-calendario" 
+        class="tab-btn active border-b-2 border-indigo-600 px-5 py-3 text-sm font-semibold text-indigo-600 transition cursor-pointer"
+      >
+        📅 Calendario
+      </button>
+      <button 
+        data-tab-target="tab-canciones" 
+        class="tab-btn border-b-2 border-transparent px-5 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 transition cursor-pointer"
+      >
+        🎵 Canciones y Videos
+      </button>
+      <button 
+        data-tab-target="tab-progreso" 
+        class="tab-btn border-b-2 border-transparent px-5 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 transition cursor-pointer"
+      >
+        📊 Logros Familiares
+      </button>
+      <button 
+        data-tab-target="tab-recursos" 
+        class="tab-btn border-b-2 border-transparent px-5 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 transition cursor-pointer"
+      >
+        📚 Recursos Extra
+      </button>
+    </div>
+
+    <!-- TAB: Calendario -->
+    <div id="tab-calendario" class="tab-pane block">
+      <div class="grid gap-4">
+        {WEEKS.map(w => {
+          const isCompleted = progressMap.get(w.week) || false;
+          return (
+            <div 
+              class={`week-card flex items-start gap-4 p-5 sm:p-6 bg-white rounded-2xl border transition-all duration-300 ${
+                isCompleted 
+                  ? 'border-emerald-200 shadow-sm bg-emerald-50/20' 
+                  : 'border-slate-100 hover:border-slate-200 hover:shadow-md'
+              }`}
+              data-week={w.week}
+            >
+              <!-- Checkbox wrapper -->
+              <div class="pt-0.5 shrink-0">
+                <input 
+                  type="checkbox"
+                  class="week-checkbox w-6 h-6 border-2 rounded-lg cursor-pointer transition-all border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-2 checked:border-emerald-600"
+                  checked={isCompleted}
+                  data-week={w.week}
+                  data-user-id={selectedUserId}
+                />
+              </div>
+
+              <!-- Content details -->
+              <div class="flex-grow">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 tracking-wide uppercase">
+                    Semana {w.week}
+                  </span>
+                  <span class={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold ${
+                    w.unit.startsWith("Unit") 
+                      ? 'bg-indigo-100 text-indigo-800' 
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {w.unit}
+                  </span>
+                </div>
+                
+                <h3 class="text-base font-bold text-slate-800 mb-1">
+                  {w.focus.split('(')[0]}
+                </h3>
+                {w.focus.includes('(') && (
+                  <p class="text-sm text-slate-500">
+                    {w.focus.substring(w.focus.indexOf('(') + 1, w.focus.length - 1)}
+                  </p>
+                )}
+                
+                <!-- Songs indicator inside card if present -->
+                {w.songs.length > 0 && (
+                  <div class="mt-3 flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                    <span>🎵</span>
+                    <span>{w.songs.length} recurso{w.songs.length > 1 ? 's' : ''} musical{w.songs.length > 1 ? 'es' : ''} disponible{w.songs.length > 1 ? 's' : ''}</span>
+                  </div>
+                )}
+              </div>
+
+              <!-- Completion status badge -->
+              <div class="shrink-0 self-center hidden sm:block">
+                <span class={`status-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-300 ${
+                  isCompleted 
+                    ? 'bg-emerald-100 text-emerald-800' 
+                    : 'bg-slate-100 text-slate-500'
+                }`}>
+                  <span class="status-indicator w-1.5 h-1.5 rounded-full bg-current"></span>
+                  <span class="status-text">{isCompleted ? 'Completado' : 'Pendiente'}</span>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    <!-- TAB: Canciones y Videos -->
+    <div id="tab-canciones" class="tab-pane hidden">
+      <div class="grid gap-6">
+        {WEEKS.filter(w => w.songs.length > 0).map(w => (
+          <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">Semana {w.week}</span>
+              <h3 class="text-base font-bold text-slate-800">{w.unit}: {w.focus.split('(')[0]}</h3>
+            </div>
+
+            <div class="grid sm:grid-cols-2 gap-3">
+              {w.songs.map(song => (
+                <a 
+                  href={song.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  class="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:border-indigo-100 hover:bg-indigo-50/30 group transition duration-200 cursor-pointer"
+                >
+                  <div class="flex items-center gap-3">
+                    <span class="text-xl">
+                      {song.type === 'song' ? '🎵' : '📺'}
+                    </span>
+                    <div class="text-left">
+                      <p class="text-sm font-semibold text-slate-700 group-hover:text-indigo-600 transition">
+                        {song.title.split('-')[0].trim()}
+                      </p>
+                      <p class="text-xs text-slate-400">
+                        {song.title.includes('-') ? song.title.split('-')[1].trim() : 'Super Simple'}
+                      </p>
+                    </div>
+                  </div>
+                  <span class="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition duration-200 text-sm">
+                    ➔
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <!-- TAB: Logros Familiares -->
+    <div id="tab-progreso" class="tab-pane hidden">
+      <div class="bg-white rounded-2xl p-6 sm:p-8 border border-slate-100 shadow-sm mb-6">
+        <h3 class="text-lg font-bold text-slate-800 mb-6">
+          Tabla de Clasificación Familiar
+        </h3>
+        
+        <!-- Compare users progress -->
+        <div class="grid gap-6">
+          {users.map(u => {
+            // We should calculate each user's progress percentage
+            // Wait, we only queried the active user's progress on server. 
+            // In a simple family app, we can calculate percentages on the server easily by querying all progress!
+            // Wait, let's query all progress rows.
+            // Let's write a query for all progress:
+            // Let's count completed weeks per user.
+            // We can pre-calculate this!
+            return (
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <span class="text-2xl">{u.avatar}</span>
+                    <span class="text-sm font-bold text-slate-700">{u.name}</span>
+                    {u.id === selectedUserId && (
+                      <span class="text-xs font-medium px-2 py-0.5 rounded bg-indigo-50 text-indigo-600">Tú</span>
+                    )}
+                  </div>
+                  <span class="text-sm font-bold text-indigo-600" id={`comparison-percent-${u.id}`}>
+                    Calculando...
+                  </span>
+                </div>
+                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    class="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out"
+                    id={`comparison-bar-${u.id}`}
+                    style="width: 0%"
+                  ></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 text-white shadow-sm flex flex-col sm:flex-row items-center gap-6">
+        <span class="text-4xl shrink-0">🏆</span>
+        <div>
+          <h4 class="text-base font-bold">¡Desafío de Verano!</h4>
+          <p class="text-sm text-amber-50 text-balance mt-0.5">
+            ¡El primer miembro de la familia que complete las 8 unidades gana una sorpresa especial! Recuerda completar tu checklist cada vez que repases o cantes tus canciones.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Recursos Extra -->
+    <div id="tab-recursos" class="tab-pane hidden">
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div class="p-6 bg-white rounded-2xl border border-slate-100 hover:border-slate-200 transition shadow-sm flex items-start gap-4">
+          <span class="text-3xl p-3 rounded-xl bg-green-50 text-green-600 shrink-0">🦉</span>
+          <div>
+            <h4 class="font-bold text-slate-800 mb-1">Duolingo o Lingokids</h4>
+            <p class="text-xs text-slate-500 mb-2">15 minutos diarios</p>
+            <p class="text-sm text-slate-600 leading-relaxed">
+              Ideal para practicar vocabulario de forma lúdica y mantener la constancia todos los días de forma divertida.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-6 bg-white rounded-2xl border border-slate-100 hover:border-slate-200 transition shadow-sm flex items-start gap-4">
+          <span class="text-3xl p-3 rounded-xl bg-pink-50 text-pink-600 shrink-0">🐷</span>
+          <div>
+            <h4 class="font-bold text-slate-800 mb-1">Peppa Pig o Bluey</h4>
+            <p class="text-xs text-slate-500 mb-2">Audio original con subtítulos</p>
+            <p class="text-sm text-slate-600 leading-relaxed">
+              Ver episodios cortos de dibujos animados sencillos ayuda enormemente a entrenar el oído y asociar sonidos con palabras.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-6 bg-white rounded-2xl border border-slate-100 hover:border-slate-200 transition shadow-sm flex items-start gap-4">
+          <span class="text-3xl p-3 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">📘</span>
+          <div>
+            <h4 class="font-bold text-slate-800 mb-1">Student's Book & Workbook</h4>
+            <p class="text-xs text-slate-500 mb-2">Interchange Intro Oficial</p>
+            <p class="text-sm text-slate-600 leading-relaxed">
+              Libro de texto base. Completa los ejercicios correspondientes a cada unidad para afianzar los conceptos de gramática.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-6 bg-white rounded-2xl border border-slate-100 hover:border-slate-200 transition shadow-sm flex items-start gap-4">
+          <span class="text-3xl p-3 rounded-xl bg-amber-50 text-amber-600 shrink-0">🧒</span>
+          <div>
+            <h4 class="font-bold text-slate-800 mb-1">LearnEnglish Kids</h4>
+            <p class="text-xs text-slate-500 mb-2">British Council Portal</p>
+            <p class="text-sm text-slate-600 leading-relaxed">
+              Web con juegos de deletreo, videos educativos interactivos y fichas de actividades listas para imprimir y jugar.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Add Member Modal -->
+  <dialog id="modal-add-member" class="rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm max-w-md w-full mx-4">
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="text-lg font-bold text-slate-800">Añadir familiar</h3>
+      <button id="btn-close-modal" class="text-slate-400 hover:text-slate-600 text-2xl font-bold cursor-pointer">×</button>
+    </div>
+
+    <form id="form-add-member" class="space-y-4">
+      <div>
+        <label for="member-name" class="block text-sm font-semibold text-slate-700 mb-1.5">Nombre</label>
+        <input 
+          type="text" 
+          id="member-name" 
+          placeholder="Ej. Sofía, Papá, Mamá..." 
+          required 
+          class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-slate-800"
+        />
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Elige un emoji</label>
+        <div class="grid grid-cols-6 gap-2.5 max-h-40 overflow-y-auto p-1">
+          {AVATARS.map((avatar, idx) => (
+            <label class="cursor-pointer">
+              <input 
+                type="radio" 
+                name="member-avatar" 
+                value={avatar} 
+                checked={idx === 0}
+                class="sr-only peer" 
+              />
+              <span class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 border-2 border-transparent peer-checked:border-indigo-600 peer-checked:bg-indigo-50 text-2xl transition duration-150">
+                {avatar}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div id="modal-error" class="text-xs text-rose-600 hidden font-semibold"></div>
+
+      <div class="flex gap-3 pt-2">
+        <button 
+          type="button" 
+          id="btn-cancel-modal"
+          class="flex-1 py-3 text-sm font-semibold text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button 
+          type="submit" 
+          class="flex-1 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition cursor-pointer"
+        >
+          Guardar
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Footnote -->
+  <footer class="text-center py-6 text-xs text-slate-400 border-t border-slate-100">
+    <p>English Adventure • Hecho con cariño para la familia 🏕️</p>
+  </footer>
+</Layout>
+
+<!-- Client-side tab & progress handling script -->
+<script is:inline define:vars={{ selectedUserId }}>
+  // Manage client-side navigation tabs
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabPanes = document.querySelectorAll('.tab-pane');
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-tab-target');
+      
+      tabBtns.forEach(b => {
+        b.classList.remove('active', 'border-indigo-600', 'text-indigo-600');
+        b.classList.add('border-transparent', 'text-slate-500');
+      });
+      tabPanes.forEach(p => p.classList.replace('block', 'hidden'));
+
+      btn.classList.add('active', 'border-indigo-600', 'text-indigo-600');
+      btn.classList.remove('border-transparent', 'text-slate-500');
+      
+      const targetPane = document.getElementById(target);
+      if (targetPane) targetPane.classList.replace('hidden', 'block');
+    });
+  });
+
+  // Modal toggle handlers
+  const modal = document.getElementById('modal-add-member');
+  const openModalBtn = document.getElementById('btn-open-modal');
+  const closeModalBtn = document.getElementById('btn-close-modal');
+  const cancelModalBtn = document.getElementById('btn-cancel-modal');
+  const addForm = document.getElementById('form-add-member');
+  const modalError = document.getElementById('modal-error');
+
+  openModalBtn?.addEventListener('click', () => {
+    modalError.classList.add('hidden');
+    modalError.textContent = '';
+    modal.showModal();
+  });
+
+  const closeModal = () => modal.close();
+  closeModalBtn?.addEventListener('click', closeModal);
+  cancelModalBtn?.addEventListener('click', closeModal);
+
+  // Form submission handler
+  addForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    modalError.classList.add('hidden');
+
+    const name = document.getElementById('member-name').value;
+    const avatar = document.querySelector('input[name="member-avatar"]:checked')?.value;
+
+    try {
+      const res = await fetch('/api/add-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, avatar })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Redirect to selection of new user
+        window.location.search = `?user_id=${data.userId}`;
+      } else {
+        modalError.textContent = data.error || 'Ocurrió un error inesperado';
+        modalError.classList.remove('hidden');
+      }
+    } catch (err) {
+      modalError.textContent = 'Error al conectar con el servidor';
+      modalError.classList.remove('hidden');
+    }
+  });
+
+  // Progress toggles handling (AJAX)
+  const checkboxes = document.querySelectorAll('.week-checkbox');
+  
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const week = parseInt(cb.getAttribute('data-week'), 10);
+      const userId = parseInt(cb.getAttribute('data-user-id'), 10);
+      const completed = cb.checked;
+      
+      // Update Card Visuals Instantly
+      const card = cb.closest('.week-card');
+      const statusBadge = card.querySelector('.status-badge');
+      const statusIndicator = card.querySelector('.status-indicator');
+      const statusText = card.querySelector('.status-text');
+
+      if (completed) {
+        card.classList.add('border-emerald-200', 'bg-emerald-50/20');
+        card.classList.remove('border-slate-100');
+        statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
+        statusBadge.classList.replace('text-slate-500', 'text-emerald-800');
+        statusText.textContent = 'Completado';
+      } else {
+        card.classList.remove('border-emerald-200', 'bg-emerald-50/20');
+        card.classList.add('border-slate-100');
+        statusBadge.classList.replace('bg-emerald-100', 'bg-slate-100');
+        statusBadge.classList.replace('text-emerald-800', 'text-slate-500');
+        statusText.textContent = 'Pendiente';
+      }
+
+      try {
+        const res = await fetch('/api/toggle-progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, week, completed })
+        });
+        
+        if (!res.ok) {
+          throw new Error('Server error');
+        }
+        
+        // Recalculate and update client-side progress stats
+        updateStats();
+      } catch (err) {
+        // Revert on error
+        cb.checked = !completed;
+        cb.dispatchEvent(new Event('change'));
+        alert('Error al guardar el progreso');
+      }
+    });
+  });
+
+  function updateStats() {
+    const total = 8;
+    const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const percent = Math.round((checked / total) * 100);
+
+    // Update statistics numbers
+    const statCompleted = document.getElementById('stat-completed');
+    if (statCompleted) statCompleted.textContent = checked;
+
+    const statPercent = document.getElementById('stat-percent');
+    if (statPercent) statPercent.textContent = percent;
+
+    // Update linear bar
+    const barProgress = document.getElementById('bar-progress');
+    if (barProgress) barProgress.style.width = `${percent}%`;
+
+    // Update circular progress circle offset
+    const circle = document.getElementById('circle-progress');
+    if (circle) {
+      const radius = 40;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference * (1 - percent / 100);
+      circle.style.strokeDashoffset = offset;
+    }
+
+    // Update motivational text
+    const messageEl = document.getElementById('motivational-message');
+    if (messageEl) {
+      let msg = "";
+      if (percent === 0) msg = "¡Empecemos esta gran aventura! 🚀";
+      else if (percent <= 30) msg = "¡Buen comienzo! Cada paso cuenta. 🌟";
+      else if (percent <= 70) msg = "¡Excelente progreso! Lo estás haciendo genial. 💪";
+      else if (percent < 100) msg = "¡Casi en la meta! ¡Sigue así! 🎉";
+      else msg = "¡Felicidades! ¡Completaste toda la aventura! 🎓🏆";
+      messageEl.textContent = msg;
+    }
+
+    // Update comparative table stats
+    const compBar = document.getElementById(`comparison-bar-${selectedUserId}`);
+    if (compBar) compBar.style.width = `${percent}%`;
+
+    const compPercent = document.getElementById(`comparison-percent-${selectedUserId}`);
+    if (compPercent) compPercent.textContent = `${percent}%`;
+  }
+
+  // Load comparative stats for all users dynamically on page load
+  async function loadAllProgressStats() {
+    try {
+      const usersEl = document.querySelectorAll('[id^="comparison-bar-"]');
+      for (const el of usersEl) {
+        const id = el.id.replace('comparison-bar-', '');
+        
+        // Fetch progress for this specific user
+        const res = await fetch(`/api/user-progress-summary?user_id=${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          const percent = Math.round((data.completedCount / 8) * 100);
+          
+          el.style.width = `${percent}%`;
+          const textEl = document.getElementById(`comparison-percent-${id}`);
+          if (textEl) {
+            textEl.textContent = `${percent}% (${data.completedCount}/8)`;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load comparison stats', e);
+    }
+  }
+
+  // Run on mount
+  window.addEventListener('DOMContentLoaded', () => {
+    updateStats();
+    loadAllProgressStats();
+  });
+</script>
