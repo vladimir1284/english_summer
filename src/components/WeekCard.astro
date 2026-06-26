@@ -1,0 +1,194 @@
+---
+import SessionItem from './SessionItem.astro';
+
+interface SongVideo {
+  title: string;
+  url: string;
+  type: 'song' | 'video';
+}
+
+interface SessionData {
+  number: number;
+  sb: string;
+  wb: string;
+  extra: string;
+}
+
+interface WeekData {
+  week: number;
+  unit: string;
+  focus: string;
+  songs: SongVideo[];
+  sessions: SessionData[];
+}
+
+interface Props {
+  weekData: WeekData;
+  isCompleted: boolean;
+  selectedUserId: number;
+  sessionProgress: Record<number, boolean>; // key: session_num (1..4) -> value: completed (boolean)
+}
+
+const { weekData, isCompleted, selectedUserId, sessionProgress } = Astro.props;
+
+// Calculate progress percentage for this specific week
+const totalSessions = weekData.sessions.length;
+const completedSessions = Object.values(sessionProgress).filter(Boolean).length;
+const weekProgressPercent = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
+---
+
+<div 
+  class={`week-card flex flex-col bg-white rounded-2xl border transition-all duration-300 ${
+    isCompleted 
+      ? 'border-emerald-200 shadow-sm bg-emerald-50/10' 
+      : 'border-slate-100 hover:border-slate-200 hover:shadow-md'
+  }`}
+  data-week={weekData.week}
+>
+  <!-- Card Header -->
+  <div class="flex items-start gap-4 p-5 sm:p-6">
+    <!-- Checkbox wrapper -->
+    <div class="pt-1 shrink-0">
+      <input 
+        type="checkbox"
+        class="week-checkbox w-6 h-6 border-2 rounded-lg cursor-pointer transition-all border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-2 checked:border-emerald-600"
+        checked={isCompleted}
+        data-week={weekData.week}
+        data-user-id={selectedUserId}
+      />
+    </div>
+
+    <!-- Content details -->
+    <div class="flex-grow min-w-0">
+      <div class="flex flex-wrap items-center gap-2 mb-1">
+        <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 tracking-wide uppercase">
+          Semana {weekData.week}
+        </span>
+        <span class={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold ${
+          weekData.unit.startsWith("Unit") || weekData.unit.startsWith("Unidad")
+            ? 'bg-indigo-100 text-indigo-800' 
+            : 'bg-amber-100 text-amber-800'
+        }`}>
+          {weekData.unit}
+        </span>
+        {completedSessions > 0 && completedSessions < totalSessions && (
+          <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            {completedSessions}/{totalSessions} Sesiones
+          </span>
+        )}
+      </div>
+      
+      <h3 class="text-base font-bold text-slate-800 mb-1 truncate">
+        {weekData.focus.split('(')[0].trim()}
+      </h3>
+      {weekData.focus.includes('(') && (
+        <p class="text-sm text-slate-500 line-clamp-1">
+          {weekData.focus.substring(weekData.focus.indexOf('(') + 1, weekData.focus.length - 1)}
+        </p>
+      )}
+      
+      <!-- Songs indicator inside card if present -->
+      {weekData.songs.length > 0 && (
+        <div class="mt-2.5 flex items-center gap-1.5 text-xs font-medium text-slate-400">
+          <span>🎵</span>
+          <span>{weekData.songs.length} recurso{weekData.songs.length > 1 ? 's' : ''} musical{weekData.songs.length > 1 ? 'es' : ''}</span>
+        </div>
+      )}
+    </div>
+
+    <!-- Right Side: Status Badge + Expand Button -->
+    <div class="flex items-center gap-3 shrink-0 self-center">
+      <span class={`status-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-300 hidden sm:inline-flex ${
+        isCompleted 
+          ? 'bg-emerald-100 text-emerald-800' 
+          : 'bg-slate-100 text-slate-500'
+      }`}>
+        <span class="status-indicator w-1.5 h-1.5 rounded-full bg-current"></span>
+        <span class="status-text">{isCompleted ? 'Completado' : 'Pendiente'}</span>
+      </span>
+
+      <!-- Expand/Collapse Button -->
+      <button 
+        type="button" 
+        class="toggle-details-btn p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all duration-200 cursor-pointer"
+        aria-label="Expandir semana"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transform transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Weekly Progress Bar (subtle helper) -->
+  {totalSessions > 0 && weekProgressPercent > 0 && weekProgressPercent < 100 && (
+    <div class="px-5 sm:px-6 pb-2">
+      <div class="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+        <div class="h-full bg-gradient-to-r from-amber-400 to-indigo-500 transition-all duration-300" style={{ width: `${weekProgressPercent}%` }}></div>
+      </div>
+    </div>
+  )}
+
+  <!-- Expanded Card Details -->
+  <div class="details-panel hidden border-t border-slate-100 bg-slate-50/30 rounded-b-2xl transition-all duration-300">
+    <div class="p-5 sm:p-6 space-y-6">
+      
+      <!-- Sessions Section -->
+      <div>
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+          Plan de Sesiones (4 clases de 90 min)
+        </h4>
+        <div class="space-y-3">
+          {weekData.sessions.map(s => (
+            <SessionItem 
+              week={weekData.week}
+              sessionNum={s.number}
+              sb={s.sb}
+              wb={s.wb}
+              extra={s.extra}
+              isCompleted={sessionProgress[s.number] || false}
+              userId={selectedUserId}
+            />
+          ))}
+        </div>
+      </div>
+
+      <!-- Songs & Videos Section (conveniently embedded) -->
+      {weekData.songs.length > 0 && (
+        <div class="pt-4 border-t border-slate-100">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+            Recursos Multimedia Recomendados
+          </h4>
+          <div class="grid sm:grid-cols-2 gap-3">
+            {weekData.songs.map(song => (
+              <a 
+                href={song.url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                class="flex items-center justify-between p-3.5 rounded-xl border border-slate-200/60 bg-white hover:border-indigo-100 hover:bg-indigo-50/20 group transition duration-200 cursor-pointer shadow-xs"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-lg">
+                    {song.type === 'song' ? '🎵' : '📺'}
+                  </span>
+                  <div class="text-left">
+                    <p class="text-sm font-semibold text-slate-700 group-hover:text-indigo-600 transition truncate max-w-[200px] sm:max-w-xs">
+                      {song.title.split('-')[0].trim()}
+                    </p>
+                    <p class="text-xs text-slate-400">
+                      {song.title.includes('-') ? song.title.split('-')[1].trim() : 'Super Simple'}
+                    </p>
+                  </div>
+                </div>
+                <span class="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition duration-200 text-sm">
+                  ➔
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+  </div>
+</div>

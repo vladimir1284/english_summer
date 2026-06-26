@@ -1,6 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { getDB } from '../utils/db';
+import WeekCard from '../components/WeekCard.astro';
+
 // Define TS Interfaces for DB types
 interface UserRow {
   id: number;
@@ -11,6 +13,13 @@ interface UserRow {
 interface ProgressRow {
   user_id: number;
   week: number;
+  completed: number;
+}
+
+interface SessionProgressRow {
+  user_id: number;
+  week: number;
+  session_num: number;
   completed: number;
 }
 
@@ -59,16 +68,48 @@ progressRows.forEach(row => {
   progressMap.set(row.week, row.completed === 1);
 });
 
+// Query session progress for selected user
+let sessionProgressRows: SessionProgressRow[] = [];
+if (selectedUser) {
+  try {
+    const sessionProgressResult = await db.prepare('SELECT * FROM session_progress WHERE user_id = ?')
+      .bind(selectedUserId)
+      .all<SessionProgressRow>();
+    sessionProgressRows = sessionProgressResult.results || [];
+  } catch (e: any) {
+    console.log("[DEBUG ERROR] Failed to query session progress:", e.message, e.stack);
+  }
+}
+
+// Build session progress map: week (1..8) -> session_num (1..4) -> completed (boolean)
+const sessionProgressMap = new Map<number, Record<number, boolean>>();
+for (let i = 1; i <= 8; i++) {
+  sessionProgressMap.set(i, { 1: false, 2: false, 3: false, 4: false });
+}
+sessionProgressRows.forEach(row => {
+  const wMap = sessionProgressMap.get(row.week);
+  if (wMap) {
+    wMap[row.session_num] = row.completed === 1;
+  }
+});
+
 // Calculate statistics
 const totalWeeks = 8;
 const completedCount = Array.from(progressMap.values()).filter(Boolean).length;
 const percentCompleted = Math.round((completedCount / totalWeeks) * 100);
 
-// Static Weeks Data
+// Static Weeks Data with Sessions
 interface SongVideo {
   title: string;
   url: string;
   type: 'song' | 'video';
+}
+
+interface SessionData {
+  number: number;
+  sb: string;
+  wb: string;
+  extra: string;
 }
 
 interface WeekData {
@@ -76,6 +117,7 @@ interface WeekData {
   unit: string;
   focus: string;
   songs: SongVideo[];
+  sessions: SessionData[];
 }
 
 const WEEKS: WeekData[] = [
@@ -87,6 +129,12 @@ const WEEKS: WeekData[] = [
       { title: "Hello Hello! - Super Simple", url: "https://www.youtube.com/watch?v=fN1Cyr0ZK9M", type: "song" },
       { title: "Hello! - Super Simple", url: "https://www.youtube.com/watch?v=tVlcKp3bWH8", type: "song" },
       { title: "ABC Song - Super Simple", url: "https://www.youtube.com/watch?v=5XEN4vtH4Ic", type: "song" }
+    ],
+    sessions: [
+      { number: 1, sb: "Págs. 2-4: Conversation, Snapshot (nombres y apodos), Grammar Focus (What's your name? / I'm / He's / She's)", wb: "Págs. 1-2 (ejercicios 1-4)", extra: "Role plays de presentaciones + canción 'Hello'" },
+      { number: 2, sb: "Págs. 4-5: Numbers 0-10, Phone numbers, Email", wb: "Págs. 3-4 (ejercicios 5-7)", extra: "Practicar deletrear nombres + ABC Song" },
+      { number: 3, sb: "Págs. 6-7: Listening, Speaking (introductions), Interchange activity", wb: "Págs. 5-6 (ejercicios 8-10)", extra: "Grabar mini-diálogos" },
+      { number: 4, sb: "Review completo Unit 1 + Progress Check (si hay)", wb: "Review remaining pages", extra: "Bingo de nombres y números" }
     ]
   },
   {
@@ -96,6 +144,12 @@ const WEEKS: WeekData[] = [
     songs: [
       { title: "Where is Thumbkin? - Super Simple", url: "https://www.youtube.com/watch?v=fN1Cyr0ZK9M", type: "song" },
       { title: "Clean Up Song - Super Simple", url: "https://www.youtube.com/watch?v=1GDFa-nEzlg", type: "song" }
+    ],
+    sessions: [
+      { number: 1, sb: "Págs. 8-9: Snapshot (objetos), Conversation, Vocabulary (classroom objects)", wb: "Págs. 7-8", extra: "Juego con objetos reales + 'Where is Thumbkin?'" },
+      { number: 2, sb: "Págs. 10-11: Grammar Focus (This/These, That/Those, preposiciones in/on/under)", wb: "Págs. 9-10", extra: "Descripción de habitación (dibujo)" },
+      { number: 3, sb: "Págs. 12-13: Listening, Pronunciation, Speaking", wb: "Págs. 11-12", extra: "Memory game con flashcards" },
+      { number: 4, sb: "Review + Progress Check Units 1-2", wb: "Review completo", extra: "Juego 'Find the differences'" }
     ]
   },
   {
@@ -104,6 +158,12 @@ const WEEKS: WeekData[] = [
     focus: "Where are you from? (Países, nacionalidades, y números del 11 al 30)",
     songs: [
       { title: "Hello Around the World", url: "https://www.youtube.com/watch?v=fN1Cyr0ZK9M", type: "song" }
+    ],
+    sessions: [
+      { number: 1, sb: "Págs. inicio: Countries & nationalities, Conversation", wb: "Primeras 2 págs. WB", extra: "Mapa del mundo + canción países" },
+      { number: 2, sb: "Grammar Focus (Are you from...? / Yes, I am / No, I'm not) + adjectives", wb: "Págs. 3-4", extra: "Role play 'Meeting new friends'" },
+      { number: 3, sb: "Listening + Numbers 11-100", wb: "Págs. 5", extra: "Dibujar familia y origen" },
+      { number: 4, sb: "Speaking + Reading", wb: "Review", extra: "Proyecto 'My international friends'" }
     ]
   },
   {
@@ -113,6 +173,12 @@ const WEEKS: WeekData[] = [
     songs: [
       { title: "This Is The Way We Get Dressed - Super Simple", url: "https://www.youtube.com/watch?v=1GDFa-nEzlg", type: "song" },
       { title: "This Is The Way We Get Dressed (version 2)", url: "https://www.youtube.com/watch?v=V8iNAq4b7po", type: "song" }
+    ],
+    sessions: [
+      { number: 1, sb: "Vocabulary clothes & colors + Conversation", wb: "Primeras 2 págs.", extra: "Canción 'This Is The Way We Get Dressed'" },
+      { number: 2, sb: "Grammar (Possessive pronouns: mine, yours, his, hers)", wb: "Págs. 3-4", extra: "Fashion show con ropa real o dibujada" },
+      { number: 3, sb: "Listening + Speaking", wb: "Págs. 5", extra: "'Lost and Found' role plays" },
+      { number: 4, sb: "Review + Progress Check", wb: "Review", extra: "Dibujar outfit favorito y describirlo" }
     ]
   },
   {
@@ -122,6 +188,12 @@ const WEEKS: WeekData[] = [
     songs: [
       { title: "What Time Is It? - Telling Time Song", url: "https://www.youtube.com/watch?v=hqnc_PcvoB0", type: "song" },
       { title: "Time Is Up - Super Simple", url: "https://www.youtube.com/watch?v=2fBkD00JvHY", type: "song" }
+    ],
+    sessions: [
+      { number: 1, sb: "Telling the time + Vocabulary routines", wb: "Primeras 2 págs.", extra: "Canción 'What Time Is It?'" },
+      { number: 2, sb: "Present Simple (I wake up at..., He/She...)", wb: "Págs. 3-4", extra: "Horario diario dibujado" },
+      { number: 3, sb: "Listening + Pronunciation", wb: "Págs. 5", extra: "'My perfect day'" },
+      { number: 4, sb: "Speaking + Review", wb: "Review", extra: "Video rutina diaria (Peppa)" }
     ]
   },
   {
@@ -131,19 +203,37 @@ const WEEKS: WeekData[] = [
     songs: [
       { title: "Hide & Seek Around The House - Super Simple", url: "https://www.youtube.com/watch?v=CnevsHDtJXo", type: "song" },
       { title: "In The Kitchen - Super Simple", url: "https://www.youtube.com/watch?v=2sClBxucyf8", type: "song" }
+    ],
+    sessions: [
+      { number: 1, sb: "Vocabulary house & furniture", wb: "Primeras 2 págs.", extra: "Canción 'In My House'" },
+      { number: 2, sb: "There is / There are + preposiciones", wb: "Págs. 3-4", extra: "Dibujar 'My Dream House'" },
+      { number: 3, sb: "Listening + Speaking (describir casa)", wb: "Págs. 5", extra: "Collage o dibujo grande" },
+      { number: 4, sb: "Review + Project", wb: "Review", extra: "Presentar su casa" }
     ]
   },
   {
     week: 7,
     unit: "Review",
     focus: "Integración de las unidades 1 a 6 (Juegos de repaso y práctica oral)",
-    songs: []
+    songs: [],
+    sessions: [
+      { number: 1, sb: "Repaso general Student’s Book (páginas clave de cada unidad)", wb: "—", extra: "—" },
+      { number: 2, sb: "—", wb: "Workbook review completo + ejercicios mixtos", extra: "—" },
+      { number: 3, sb: "—", wb: "—", extra: "Juegos y conversaciones libres" },
+      { number: 4, sb: "—", wb: "—", extra: "Empezar proyecto final 'My English Book'" }
+    ]
   },
   {
     week: 8,
     unit: "Project",
     focus: "Poster 'All About Me' y fiesta de celebración final 🥳",
-    songs: []
+    songs: [],
+    sessions: [
+      { number: 1, sb: "Última unidad o extensión (be going to) + repaso", wb: "—", extra: "—" },
+      { number: 2, sb: "Última unidad o extensión (be going to) + repaso", wb: "—", extra: "—" },
+      { number: 3, sb: "Trabajo en proyecto final + presentaciones", wb: "—", extra: "—" },
+      { number: 4, sb: "Trabajo en proyecto final + presentaciones + celebración", wb: "—", extra: "—" }
+    ]
   }
 ];
 
@@ -296,7 +386,7 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
         data-tab-target="tab-calendario" 
         class="tab-btn active border-b-2 border-indigo-600 px-5 py-3 text-sm font-semibold text-indigo-600 transition cursor-pointer"
       >
-        📅 Calendario
+        📅 Calendario y Sesiones
       </button>
       <button 
         data-tab-target="tab-canciones" 
@@ -321,75 +411,14 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
     <!-- TAB: Calendario -->
     <div id="tab-calendario" class="tab-pane block">
       <div class="grid gap-4">
-        {WEEKS.map(w => {
-          const isCompleted = progressMap.get(w.week) || false;
-          return (
-            <div 
-              class={`week-card flex items-start gap-4 p-5 sm:p-6 bg-white rounded-2xl border transition-all duration-300 ${
-                isCompleted 
-                  ? 'border-emerald-200 shadow-sm bg-emerald-50/20' 
-                  : 'border-slate-100 hover:border-slate-200 hover:shadow-md'
-              }`}
-              data-week={w.week}
-            >
-              <!-- Checkbox wrapper -->
-              <div class="pt-0.5 shrink-0">
-                <input 
-                  type="checkbox"
-                  class="week-checkbox w-6 h-6 border-2 rounded-lg cursor-pointer transition-all border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-2 checked:border-emerald-600"
-                  checked={isCompleted}
-                  data-week={w.week}
-                  data-user-id={selectedUserId}
-                />
-              </div>
-
-              <!-- Content details -->
-              <div class="flex-grow">
-                <div class="flex flex-wrap items-center gap-2 mb-1">
-                  <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 tracking-wide uppercase">
-                    Semana {w.week}
-                  </span>
-                  <span class={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold ${
-                    w.unit.startsWith("Unit") 
-                      ? 'bg-indigo-100 text-indigo-800' 
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {w.unit}
-                  </span>
-                </div>
-                
-                <h3 class="text-base font-bold text-slate-800 mb-1">
-                  {w.focus.split('(')[0]}
-                </h3>
-                {w.focus.includes('(') && (
-                  <p class="text-sm text-slate-500">
-                    {w.focus.substring(w.focus.indexOf('(') + 1, w.focus.length - 1)}
-                  </p>
-                )}
-                
-                <!-- Songs indicator inside card if present -->
-                {w.songs.length > 0 && (
-                  <div class="mt-3 flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                    <span>🎵</span>
-                    <span>{w.songs.length} recurso{w.songs.length > 1 ? 's' : ''} musical{w.songs.length > 1 ? 'es' : ''} disponible{w.songs.length > 1 ? 's' : ''}</span>
-                  </div>
-                )}
-              </div>
-
-              <!-- Completion status badge -->
-              <div class="shrink-0 self-center hidden sm:block">
-                <span class={`status-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-300 ${
-                  isCompleted 
-                    ? 'bg-emerald-100 text-emerald-800' 
-                    : 'bg-slate-100 text-slate-500'
-                }`}>
-                  <span class="status-indicator w-1.5 h-1.5 rounded-full bg-current"></span>
-                  <span class="status-text">{isCompleted ? 'Completado' : 'Pendiente'}</span>
-                </span>
-              </div>
-            </div>
-          );
-        })}
+        {WEEKS.map(w => (
+          <WeekCard 
+            weekData={w}
+            isCompleted={progressMap.get(w.week) || false}
+            selectedUserId={selectedUserId}
+            sessionProgress={sessionProgressMap.get(w.week) || { 1: false, 2: false, 3: false, 4: false }}
+          />
+        ))}
       </div>
     </div>
 
@@ -445,13 +474,6 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
         <!-- Compare users progress -->
         <div class="grid gap-6">
           {users.map(u => {
-            // We should calculate each user's progress percentage
-            // Wait, we only queried the active user's progress on server. 
-            // In a simple family app, we can calculate percentages on the server easily by querying all progress!
-            // Wait, let's query all progress rows.
-            // Let's write a query for all progress:
-            // Let's count completed weeks per user.
-            // We can pre-calculate this!
             return (
               <div class="flex flex-col gap-2">
                 <div class="flex items-center justify-between">
@@ -677,33 +699,100 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
     }
   });
 
-  // Progress toggles handling (AJAX)
-  const checkboxes = document.querySelectorAll('.week-checkbox');
+  // Client-side expand/collapse of week cards
+  const toggleDetailsBtns = document.querySelectorAll('.toggle-details-btn');
+  toggleDetailsBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const card = btn.closest('.week-card');
+      const details = card.querySelector('.details-panel');
+      const svg = btn.querySelector('svg');
+      
+      const isHidden = details.classList.contains('hidden');
+      if (isHidden) {
+        details.classList.remove('hidden');
+        svg.classList.add('rotate-180');
+      } else {
+        details.classList.add('hidden');
+        svg.classList.remove('rotate-180');
+      }
+    });
+  });
+
+  // Also support clicking the week-card header to expand details
+  const cardHeaders = document.querySelectorAll('.week-card > div:first-child');
+  cardHeaders.forEach(header => {
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('input[type="checkbox"]') || e.target.closest('a') || e.target.closest('button')) {
+        return;
+      }
+      const card = header.closest('.week-card');
+      const btn = card.querySelector('.toggle-details-btn');
+      if (btn) btn.click();
+    });
+  });
+
+  // Progress toggles handling (AJAX) for weeks
+  const weekCheckboxes = document.querySelectorAll('.week-checkbox');
   
-  checkboxes.forEach(cb => {
+  weekCheckboxes.forEach(cb => {
     cb.addEventListener('change', async () => {
       const week = parseInt(cb.getAttribute('data-week'), 10);
       const userId = parseInt(cb.getAttribute('data-user-id'), 10);
       const completed = cb.checked;
       
-      // Update Card Visuals Instantly
       const card = cb.closest('.week-card');
       const statusBadge = card.querySelector('.status-badge');
-      const statusIndicator = card.querySelector('.status-indicator');
       const statusText = card.querySelector('.status-text');
 
+      // Update Card Visuals Instantly
       if (completed) {
-        card.classList.add('border-emerald-200', 'bg-emerald-50/20');
+        card.classList.add('border-emerald-200', 'bg-emerald-50/10');
         card.classList.remove('border-slate-100');
-        statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
-        statusBadge.classList.replace('text-slate-500', 'text-emerald-800');
-        statusText.textContent = 'Completado';
+        if (statusBadge) {
+          statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
+          statusBadge.classList.replace('text-slate-500', 'text-emerald-800');
+        }
+        if (statusText) statusText.textContent = 'Completado';
       } else {
-        card.classList.remove('border-emerald-200', 'bg-emerald-50/20');
+        card.classList.remove('border-emerald-200', 'bg-emerald-50/10');
         card.classList.add('border-slate-100');
-        statusBadge.classList.replace('bg-emerald-100', 'bg-slate-100');
-        statusBadge.classList.replace('text-emerald-800', 'text-slate-500');
-        statusText.textContent = 'Pendiente';
+        if (statusBadge) {
+          statusBadge.classList.replace('bg-emerald-100', 'bg-slate-100');
+          statusBadge.classList.replace('text-emerald-800', 'text-slate-500');
+        }
+        if (statusText) statusText.textContent = 'Pendiente';
+      }
+
+      // Check/uncheck all sessions for this week in the UI
+      const sessionCheckboxes = card.querySelectorAll('.session-checkbox');
+      sessionCheckboxes.forEach(scb => {
+        scb.checked = completed;
+        const row = scb.closest('.session-row');
+        if (completed) {
+          row.classList.add('border-emerald-100', 'bg-emerald-50/10');
+          row.classList.remove('border-slate-100');
+          row.querySelectorAll('p').forEach(p => p.classList.add('line-through', 'opacity-60'));
+        } else {
+          row.classList.remove('border-emerald-100', 'bg-emerald-50/10');
+          row.classList.add('border-slate-100');
+          row.querySelectorAll('p').forEach(p => p.classList.remove('line-through', 'opacity-60'));
+        }
+      });
+
+      // Update sub-progress bar in week card
+      const subBar = card.querySelector('.details-panel').previousElementSibling?.querySelector('.h-full');
+      if (subBar) {
+        subBar.style.width = completed ? '100%' : '0%';
+        const wrapper = subBar.parentElement.parentElement;
+        wrapper.classList.add('hidden'); // Hide the sub-bar when 0% or 100%
+      }
+
+      // Update session count badge
+      const badgeContainer = cb.parentElement.nextElementSibling.firstElementChild;
+      const sessionCountBadge = badgeContainer.querySelector('span.bg-amber-50');
+      if (sessionCountBadge) {
+        sessionCountBadge.remove();
       }
 
       try {
@@ -717,7 +806,6 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
           throw new Error('Server error');
         }
         
-        // Recalculate and update client-side progress stats
         updateStats();
       } catch (err) {
         // Revert on error
@@ -728,9 +816,122 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
     });
   });
 
+  // Progress toggles handling (AJAX) for individual sessions
+  const sessionCheckboxes = document.querySelectorAll('.session-checkbox');
+  
+  sessionCheckboxes.forEach(scb => {
+    scb.addEventListener('change', async () => {
+      const week = parseInt(scb.getAttribute('data-week'), 10);
+      const sessionNum = parseInt(scb.getAttribute('data-session'), 10);
+      const userId = parseInt(scb.getAttribute('data-user-id'), 10);
+      const completed = scb.checked;
+      
+      const row = scb.closest('.session-row');
+      
+      // Update session row visuals instantly
+      if (completed) {
+        row.classList.add('border-emerald-100', 'bg-emerald-50/10');
+        row.classList.remove('border-slate-100');
+        row.querySelectorAll('p').forEach(p => p.classList.add('line-through', 'opacity-60'));
+      } else {
+        row.classList.remove('border-emerald-100', 'bg-emerald-50/10');
+        row.classList.add('border-slate-100');
+        row.querySelectorAll('p').forEach(p => p.classList.remove('line-through', 'opacity-60'));
+      }
+
+      try {
+        const res = await fetch('/api/toggle-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, week, sessionNum, completed })
+        });
+        
+        if (!res.ok) {
+          throw new Error('Server error');
+        }
+        
+        const data = await res.json();
+        
+        // Update the week checkbox based on whether all sessions are now completed
+        const card = scb.closest('.week-card');
+        const weekCb = card.querySelector('.week-checkbox');
+        const oldWeekCompleted = weekCb.checked;
+        weekCb.checked = data.weekCompleted;
+        
+        // Update week card visuals
+        const statusBadge = card.querySelector('.status-badge');
+        const statusText = card.querySelector('.status-text');
+        
+        if (data.weekCompleted) {
+          card.classList.add('border-emerald-200', 'bg-emerald-50/10');
+          card.classList.remove('border-slate-100');
+          if (statusBadge) {
+            statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
+            statusBadge.classList.replace('text-slate-500', 'text-emerald-800');
+          }
+          if (statusText) statusText.textContent = 'Completado';
+        } else {
+          card.classList.remove('border-emerald-200', 'bg-emerald-50/10');
+          card.classList.add('border-slate-100');
+          if (statusBadge) {
+            statusBadge.classList.replace('bg-emerald-100', 'bg-slate-100');
+            statusBadge.classList.replace('text-emerald-800', 'text-slate-500');
+          }
+          if (statusText) statusText.textContent = 'Pendiente';
+        }
+        
+        // Update sub-progress bar in week card
+        const subBar = card.querySelector('.details-panel').previousElementSibling?.querySelector('.h-full');
+        if (subBar) {
+          const percent = Math.round((data.completedSessionsCount / 4) * 100);
+          subBar.style.width = `${percent}%`;
+          
+          const wrapper = subBar.parentElement.parentElement;
+          if (percent > 0 && percent < 100) {
+            wrapper.classList.remove('hidden');
+          } else {
+            wrapper.classList.add('hidden');
+          }
+        }
+        
+        // Update session count badge
+        const badgeContainer = card.querySelector('.week-checkbox').parentElement.nextElementSibling.firstElementChild;
+        let sessionCountBadge = badgeContainer.querySelector('span.bg-amber-50');
+        if (data.completedSessionsCount > 0 && data.completedSessionsCount < 4) {
+          if (!sessionCountBadge) {
+            sessionCountBadge = document.createElement('span');
+            sessionCountBadge.className = 'inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+            badgeContainer.appendChild(sessionCountBadge);
+          }
+          sessionCountBadge.textContent = `${data.completedSessionsCount}/4 Sesiones`;
+        } else {
+          if (sessionCountBadge) {
+            sessionCountBadge.remove();
+          }
+        }
+        
+        updateStats();
+      } catch (err) {
+        console.error(err);
+        // Revert checkbox state on error
+        scb.checked = !completed;
+        if (!completed) {
+          row.classList.add('border-emerald-100', 'bg-emerald-50/10');
+          row.classList.remove('border-slate-100');
+          row.querySelectorAll('p').forEach(p => p.classList.add('line-through', 'opacity-60'));
+        } else {
+          row.classList.remove('border-emerald-100', 'bg-emerald-50/10');
+          row.classList.add('border-slate-100');
+          row.querySelectorAll('p').forEach(p => p.classList.remove('line-through', 'opacity-60'));
+        }
+        alert('Error al guardar el progreso de la sesión');
+      }
+    });
+  });
+
   function updateStats() {
     const total = 8;
-    const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const checked = Array.from(weekCheckboxes).filter(cb => cb.checked).length;
     const percent = Math.round((checked / total) * 100);
 
     // Update statistics numbers
@@ -770,7 +971,7 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
     if (compBar) compBar.style.width = `${percent}%`;
 
     const compPercent = document.getElementById(`comparison-percent-${selectedUserId}`);
-    if (compPercent) compPercent.textContent = `${percent}%`;
+    if (compPercent) compPercent.textContent = `${percent}% (${checked}/8)`;
   }
 
   // Load comparative stats for all users dynamically on page load
