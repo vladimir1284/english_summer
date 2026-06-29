@@ -12,7 +12,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    const db = await getDB(locals);
+    const db = await getDB();
 
     const value = completed ? 1 : 0;
 

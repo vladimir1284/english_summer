@@ -12,7 +12,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    const db = await getDB(locals);
+    const db = await getDB();
 
     // Insert user and get ID using RETURNING clause
     const user = await db.prepare(

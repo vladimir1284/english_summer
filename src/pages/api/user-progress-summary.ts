@@ -21,7 +21,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    const db = await getDB(locals);
+    const db = await getDB();
 
     // Count completed weeks for this user
     const result = await db.prepare(

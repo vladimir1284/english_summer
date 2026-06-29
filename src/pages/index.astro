@@ -24,7 +24,7 @@ interface SessionProgressRow {
 }
 
 // Get database
-const db = await getDB(Astro.locals);
+const db = await getDB();
 
 // Query all users
 let users: UserRow[] = [];
