@@ -938,6 +938,52 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
     });
   });
 
+  // AI Prompt Copying and Toggling via Event Delegation
+  document.addEventListener('click', async (e) => {
+    const copyBtn = e.target.closest('.copy-prompt-btn');
+    if (copyBtn) {
+      const promptText = copyBtn.getAttribute('data-prompt');
+      try {
+        await navigator.clipboard.writeText(promptText);
+        
+        // Show temporary copied state
+        const span = copyBtn.querySelector('span');
+        const originalText = span.textContent;
+        span.textContent = '¡Copiado!';
+        copyBtn.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+        copyBtn.classList.remove('bg-indigo-50', 'text-indigo-700', 'border-indigo-100');
+        
+        setTimeout(() => {
+          span.textContent = originalText;
+          copyBtn.classList.remove('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+          copyBtn.classList.add('bg-indigo-50', 'text-indigo-700', 'border-indigo-100');
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy text: ', err);
+        alert('No se pudo copiar el prompt automáticamente.');
+      }
+      return;
+    }
+
+    const toggleBtn = e.target.closest('.toggle-prompt-view-btn');
+    if (toggleBtn) {
+      const row = toggleBtn.closest('.session-row');
+      const previewBox = row.querySelector('.prompt-preview-box');
+      if (previewBox) {
+        previewBox.classList.toggle('hidden');
+        const isHidden = previewBox.classList.contains('hidden');
+        if (isHidden) {
+          toggleBtn.classList.remove('text-indigo-600', 'bg-indigo-50');
+          toggleBtn.classList.add('text-slate-400');
+        } else {
+          toggleBtn.classList.add('text-indigo-600', 'bg-indigo-50');
+          toggleBtn.classList.remove('text-slate-400');
+        }
+      }
+      return;
+    }
+  });
+
   function updateStats() {
     const total = 8;
     const checked = Array.from(weekCheckboxes).filter(cb => cb.checked).length;
