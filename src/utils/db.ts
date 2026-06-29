@@ -1,16 +1,14 @@
-export async function getDB() {
+export async function getDB(locals?: any) {
+  // 1. Try to get D1 from Astro/Cloudflare locals runtime env (standard way in Astro)
+  if (locals && locals.runtime && locals.runtime.env && locals.runtime.env.DB) {
+    return locals.runtime.env.DB;
+  }
+
+  // 2. Fallback to global/cloudflare:workers import
   try {
     // @ts-ignore
     const { env } = await import('cloudflare:workers');
-    console.log("[DEBUG getDB] env keys:", Object.keys(env || {}));
     if (env && env.DB) {
-      console.log("[DEBUG getDB] env.DB type:", typeof env.DB);
-      console.log("[DEBUG getDB] env.DB keys:", Object.keys(env.DB));
-      const proto = Object.getPrototypeOf(env.DB);
-      console.log("[DEBUG getDB] env.DB proto:", proto);
-      if (proto) {
-        console.log("[DEBUG getDB] env.DB proto keys:", Object.getOwnPropertyNames(proto));
-      }
       return env.DB;
     }
   } catch (e: any) {

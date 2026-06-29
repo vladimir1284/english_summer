@@ -24,7 +24,7 @@ interface SessionProgressRow {
 }
 
 // Get database
-const db = await getDB();
+const db = await getDB(Astro.locals);
 
 // Query all users
 let users: UserRow[] = [];
@@ -741,6 +741,37 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
     });
   });
 
+  // Helper to copy text to clipboard with fallback for non-secure contexts
+  async function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (e) {
+        console.warn("navigator.clipboard failed, trying fallback", e);
+      }
+    }
+    
+    // Fallback using temp textarea
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.top = "0";
+      textArea.style.left = "0";
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (successful) return true;
+    } catch (err) {
+      console.error("Fallback copy failed", err);
+    }
+    return false;
+  }
+
   // Progress toggles handling (AJAX) for weeks
   const weekCheckboxes = document.querySelectorAll('.week-checkbox');
   
@@ -790,16 +821,16 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
       });
 
       // Update sub-progress bar in week card
-      const subBar = card.querySelector('.details-panel').previousElementSibling?.querySelector('.h-full');
-      if (subBar) {
+      const subBar = card.querySelector('.week-progress-bar-fill');
+      const subBarWrapper = card.querySelector('.week-progress-bar');
+      if (subBar && subBarWrapper) {
         subBar.style.width = completed ? '100%' : '0%';
-        const wrapper = subBar.parentElement.parentElement;
-        wrapper.classList.add('hidden'); // Hide the sub-bar when 0% or 100%
+        subBarWrapper.classList.add('hidden'); // Hide the sub-bar when 0% or 100%
       }
 
       // Update session count badge
-      const badgeContainer = cb.parentElement.nextElementSibling.firstElementChild;
-      const sessionCountBadge = badgeContainer.querySelector('span.bg-amber-50');
+      const badgeContainer = card.querySelector('.badge-container');
+      const sessionCountBadge = badgeContainer ? badgeContainer.querySelector('span.bg-amber-50') : null;
       if (sessionCountBadge) {
         sessionCountBadge.remove();
       }
@@ -817,9 +848,47 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
         
         updateStats();
       } catch (err) {
-        // Revert on error
+        console.error(err);
+        // Revert on error without dispatching change event again
         cb.checked = !completed;
-        cb.dispatchEvent(new Event('change'));
+        
+        if (!completed) {
+          card.classList.add('border-emerald-200', 'bg-emerald-50/10');
+          card.classList.remove('border-slate-100');
+          if (statusBadge) {
+            statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
+            statusBadge.classList.replace('text-slate-500', 'text-emerald-800');
+          }
+          if (statusText) statusText.textContent = 'Completed';
+        } else {
+          card.classList.remove('border-emerald-200', 'bg-emerald-50/10');
+          card.classList.add('border-slate-100');
+          if (statusBadge) {
+            statusBadge.classList.replace('bg-emerald-100', 'bg-slate-100');
+            statusBadge.classList.replace('text-emerald-800', 'text-slate-500');
+          }
+          if (statusText) statusText.textContent = 'Pending';
+        }
+
+        sessionCheckboxes.forEach(scb => {
+          scb.checked = !completed;
+          const row = scb.closest('.session-row');
+          if (!completed) {
+            row.classList.add('border-emerald-100', 'bg-emerald-50/10');
+            row.classList.remove('border-slate-100');
+            row.querySelectorAll('p').forEach(p => p.classList.add('line-through', 'opacity-60'));
+          } else {
+            row.classList.remove('border-emerald-100', 'bg-emerald-50/10');
+            row.classList.add('border-slate-100');
+            row.querySelectorAll('p').forEach(p => p.classList.remove('line-through', 'opacity-60'));
+          }
+        });
+
+        if (subBar && subBarWrapper) {
+          subBar.style.width = !completed ? '100%' : '0%';
+          subBarWrapper.classList.add('hidden');
+        }
+
         alert('Error saving progress');
       }
     });
@@ -864,7 +933,6 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
         // Update the week checkbox based on whether all sessions are now completed
         const card = scb.closest('.week-card');
         const weekCb = card.querySelector('.week-checkbox');
-        const oldWeekCompleted = weekCb.checked;
         weekCb.checked = data.weekCompleted;
         
         // Update week card visuals
@@ -890,32 +958,34 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
         }
         
         // Update sub-progress bar in week card
-        const subBar = card.querySelector('.details-panel').previousElementSibling?.querySelector('.h-full');
-        if (subBar) {
+        const subBar = card.querySelector('.week-progress-bar-fill');
+        const subBarWrapper = card.querySelector('.week-progress-bar');
+        if (subBar && subBarWrapper) {
           const percent = Math.round((data.completedSessionsCount / 4) * 100);
           subBar.style.width = `${percent}%`;
           
-          const wrapper = subBar.parentElement.parentElement;
           if (percent > 0 && percent < 100) {
-            wrapper.classList.remove('hidden');
+            subBarWrapper.classList.remove('hidden');
           } else {
-            wrapper.classList.add('hidden');
+            subBarWrapper.classList.add('hidden');
           }
         }
         
         // Update session count badge
-        const badgeContainer = card.querySelector('.week-checkbox').parentElement.nextElementSibling.firstElementChild;
-        let sessionCountBadge = badgeContainer.querySelector('span.bg-amber-50');
-        if (data.completedSessionsCount > 0 && data.completedSessionsCount < 4) {
-          if (!sessionCountBadge) {
-            sessionCountBadge = document.createElement('span');
-            sessionCountBadge.className = 'inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
-            badgeContainer.appendChild(sessionCountBadge);
-          }
-          sessionCountBadge.textContent = `${data.completedSessionsCount}/4 Sessions`;
-        } else {
-          if (sessionCountBadge) {
-            sessionCountBadge.remove();
+        const badgeContainer = card.querySelector('.badge-container');
+        if (badgeContainer) {
+          let sessionCountBadge = badgeContainer.querySelector('span.bg-amber-50');
+          if (data.completedSessionsCount > 0 && data.completedSessionsCount < 4) {
+            if (!sessionCountBadge) {
+              sessionCountBadge = document.createElement('span');
+              sessionCountBadge.className = 'inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+              badgeContainer.appendChild(sessionCountBadge);
+            }
+            sessionCountBadge.textContent = `${data.completedSessionsCount}/4 Sessions`;
+          } else {
+            if (sessionCountBadge) {
+              sessionCountBadge.remove();
+            }
           }
         }
         
@@ -943,23 +1013,31 @@ const AVATARS = ['👧', '👦', '👩', '👨', '🦁', '🐼', '🦄', '🚀',
     const copyBtn = e.target.closest('.copy-prompt-btn');
     if (copyBtn) {
       const promptText = copyBtn.getAttribute('data-prompt');
-      try {
-        await navigator.clipboard.writeText(promptText);
+      const copied = await copyToClipboard(promptText);
+      
+      if (copied) {
+        // Show temporary copied state by replacing SVG with a checkmark path
+        const svg = copyBtn.querySelector('svg');
+        let originalSVG = "";
+        if (svg) {
+          originalSVG = svg.innerHTML;
+          svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />';
+        }
         
-        // Show temporary copied state
         const span = copyBtn.querySelector('span');
-        const originalText = span.textContent;
-        span.textContent = '¡Copiado!';
+        const originalText = span ? span.textContent : null;
+        if (span) span.textContent = '¡Copiado!';
+        
         copyBtn.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
         copyBtn.classList.remove('bg-indigo-50', 'text-indigo-700', 'border-indigo-100');
         
         setTimeout(() => {
-          span.textContent = originalText;
+          if (svg) svg.innerHTML = originalSVG;
+          if (span) span.textContent = originalText;
           copyBtn.classList.remove('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
           copyBtn.classList.add('bg-indigo-50', 'text-indigo-700', 'border-indigo-100');
         }, 2000);
-      } catch (err) {
-        console.error('Failed to copy text: ', err);
+      } else {
         alert('No se pudo copiar el prompt automáticamente.');
       }
       return;

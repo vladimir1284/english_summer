@@ -60,7 +60,7 @@ const weekProgressPercent = totalSessions > 0 ? Math.round((completedSessions / 
 
     <!-- Content details -->
     <div class="flex-grow min-w-0">
-      <div class="flex flex-wrap items-center gap-2 mb-1">
+      <div class="badge-container flex flex-wrap items-center gap-2 mb-1">
         <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 tracking-wide uppercase">
           Week {weekData.week}
         </span>
@@ -121,13 +121,14 @@ const weekProgressPercent = totalSessions > 0 ? Math.round((completedSessions / 
   </div>
 
   <!-- Weekly Progress Bar (subtle helper) -->
-  {totalSessions > 0 && weekProgressPercent > 0 && weekProgressPercent < 100 && (
-    <div class="px-5 sm:px-6 pb-2">
-      <div class="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-        <div class="h-full bg-gradient-to-r from-amber-400 to-indigo-500 transition-all duration-300" style={{ width: `${weekProgressPercent}%` }}></div>
-      </div>
+  <div class={`week-progress-bar px-5 sm:px-6 pb-2 ${totalSessions > 0 && weekProgressPercent > 0 && weekProgressPercent < 100 ? '' : 'hidden'}`}>
+    <div class="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+      <div 
+        class="week-progress-bar-fill h-full bg-gradient-to-r from-amber-400 to-indigo-500 transition-all duration-300" 
+        style={{ width: `${weekProgressPercent}%` }}
+      ></div>
     </div>
-  )}
+  </div>
 
   <!-- Expanded Card Details -->
   <div class="details-panel hidden border-t border-slate-100 bg-slate-50/30 rounded-b-2xl transition-all duration-300">

@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getDB } from '../../utils/db';
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const { userId, week, sessionNum, completed } = await request.json();
 
@@ -12,7 +12,7 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    const db = await getDB();
+    const db = await getDB(locals);
 
     const value = completed ? 1 : 0;
 
